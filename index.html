@@ -3,19 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>PQ vs TreeSet 动画对比 | @zhuizi</title>
+  <title>PQ vs TreeSet 丝滑动画 | @zhuizi1</title>
   <style>
-    body { margin:0; background:#0f172a; color:#e2e8f0; font-family: system-ui; overflow:hidden; }
+    body { margin:0; background:#0a0a1a; color:#e2e8f0; font-family: system-ui; overflow:hidden; }
     canvas { display:block; }
-    .panel { position:absolute; top:20px; left:20px; background:rgba(15,23,42,0.9); padding:15px; border-radius:12px; width:300px; }
-    button { margin:5px; padding:8px 16px; background:#1d4ed8; color:white; border:none; border-radius:6px; cursor:pointer; }
-    button:hover { background:#2563eb; }
-    .stats { margin-top:10px; font-family: monospace; font-size:12px; }
-    .title { text-align:center; margin:20px; font-size:24px; font-weight:bold; color:#60a5fa; }
+    .panel { position:absolute; top:20px; left:20px; background:rgba(15,23,42,0.9); padding:15px; border-radius:12px; width:300px; backdrop-filter: blur(10px); }
+    button { margin:5px; padding:10px 18px; background:linear-gradient(45deg,#1d4ed8,#3b82f6); color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold; box-shadow:0 2px 8px rgba(0,0,0,0.3); transition:0.3s; }
+    button:hover { transform:translateY(-2px); box-shadow:0 4px 16px rgba(59,130,246,0.5); }
+    .stats { margin-top:12px; font-family: 'Courier New', monospace; font-size:13px; line-height:1.6; }
+    .title { text-align:center; margin:20px; font-size:26px; font-weight:bold; background:linear-gradient(90deg,#60a5fa,#a78bfa); -webkit-background-clip:text; color:transparent; }
   </style>
 </head>
 <body>
-<div class="title">PriorityQueue vs TreeSet 实时对比 | @zhuizi</div>
+<div class="title">PriorityQueue vs TreeSet · 丝滑动画对比 | @zhuizi1</div>
 <canvas id="canvas"></canvas>
 <div class="panel">
   <button onclick="addRandom()">插入随机数</button>
@@ -30,21 +30,71 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth; canvas.height = window.innerHeight;
 
+// 粒子系统
+class Particle {
+  constructor(x, y, val, color, type = 'trail') {
+    this.x = x; this.y = y; this.val = val; this.color = color;
+    this.vx = (Math.random()-0.5)*4; this.vy = (Math.random()-0.5)*4;
+    this.life = 1; this.decay = 0.02; this.type = type;
+    this.scale = type === 'explode' ? 1.5 : 0.8;
+  }
+  update() {
+    this.x += this.vx; this.y += this.vy;
+    this.vy += 0.1; this.life -= this.decay;
+    this.scale *= 0.98;
+  }
+  draw() {
+    ctx.save();
+    ctx.globalAlpha = this.life;
+    ctx.translate(this.x, this.y);
+    ctx.scale(this.scale, this.scale);
+    if (this.type === 'explode') {
+      ctx.shadowBlur = 20; ctx.shadowColor = this.color;
+      ctx.fillStyle = this.color;
+      ctx.font = 'bold 20px monospace';
+      ctx.fillText(this.val, -10, 5);
+    } else {
+      ctx.fillStyle = this.color;
+      ctx.font = '12px monospace';
+      ctx.fillText('·', 0, 0);
+    }
+    ctx.restore();
+  }
+}
+
+let particles = [];
+
+// 最小堆
 class PriorityQueue {
   constructor() { this.data = []; }
   offer(x) { this.data.push(x); this.siftUp(this.data.length-1); }
-  poll() { if (!this.data.length) return null; const min = this.data[0]; this.data[0] = this.data.pop(); this.siftDown(0); return min; }
+  poll() {
+    if (!this.data.length) return null;
+    const min = this.data[0];
+    this.data[0] = this.data.pop();
+    this.siftDown(0);
+    // 爆炸粒子
+    const center = { x: canvas.width * 0.3, y: canvas.height / 2 };
+    for (let i = 0; i < 12; i++) {
+      const angle = i * Math.PI * 2 / 12;
+      const p = new Particle(center.x, center.y, min, '#f59e0b', 'explode');
+      p.vx = Math.cos(angle) * 6; p.vy = Math.sin(angle) * 6;
+      particles.push(p);
+    }
+    return min;
+  }
   siftUp(i) { while (i > 0) { let p = (i-1)>>1; if (this.data[p] <= this.data[i]) break; [this.data[p], this.data[i]] = [this.data[i], this.data[p]]; i = p; } }
   siftDown(i) { const n = this.data.length; while (true) { let l = 2*i+1, r = 2*i+2, s = i; if (l < n && this.data[l] < this.data[s]) s = l; if (r < n && this.data[r] < this.data[s]) s = r; if (s === i) break; [this.data[i], this.data[s]] = [this.data[s], this.data[i]]; i = s; } }
   peek() { return this.data[0]; }
   size() { return this.data.length; }
 }
 
+// 简化红黑树（动画用）
 class TreeSet {
   constructor() { this.root = null; this.size = 0; }
   add(x) { if (this.contains(x)) return; this.root = this.insert(this.root, x); this.size++; }
   insert(node, x) {
-    if (!node) return {val: x, left: null, right: null, color: 'red'};
+    if (!node) return {val: x, left: null, right: null, color: 'red', scale: 0, opacity: 0};
     if (x < node.val) node.left = this.insert(node.left, x);
     else if (x > node.val) node.right = this.insert(node.right, x);
     return node;
@@ -58,15 +108,55 @@ class TreeSet {
 const pq = new PriorityQueue();
 const ts = new TreeSet();
 
+// 背景星空
+let stars = [];
+for (let i = 0; i < 100; i++) {
+  stars.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, size: Math.random()*2, speed: Math.random()*0.5+0.1 });
+}
+
 function addRandom() {
   const val = Math.floor(Math.random() * 100);
-  pq.offer(val);
-  ts.add(val);
-  render();
+  const startY = 80;
+  const startX = canvas.width / 2;
+  // 飞入粒子轨迹
+  for (let i = 0; i < 20; i++) {
+    setTimeout(() => {
+      particles.push(new Particle(startX + (Math.random()-0.5)*100, startY + i*15, '', '#60a5fa'));
+    }, i * 30);
+  }
+  setTimeout(() => {
+    pq.offer(val);
+    ts.add(val);
+    render();
+  }, 600);
 }
 
 function reset() {
-  pq.data = []; ts.root = null; ts.size = 0; render();
+  pq.data = []; ts.root = null; ts.size = 0; particles = []; render();
+}
+
+// 动画渲染
+let time = 0;
+function render() {
+  time += 0.016;
+  ctx.fillStyle = '#0a0a1a'; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // 流动星空
+  stars.forEach(s => {
+    s.x -= s.speed;
+    if (s.x < 0) s.x = canvas.width;
+    ctx.fillStyle = `rgba(255,255,255,${s.size/2})`;
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI*2); ctx.fill();
+  });
+
+  // 粒子
+  particles = particles.filter(p => p.life > 0);
+  particles.forEach(p => { p.update(); p.draw(); });
+
+  drawPQ();
+  drawTreeSet();
+  updateStats();
+  requestAnimationFrame(render);
 }
 
 function drawPQ() {
@@ -74,58 +164,73 @@ function drawPQ() {
   const centerY = canvas.height / 2;
   pq.data.forEach((val, i) => {
     const angle = (i / Math.max(pq.data.length, 1)) * Math.PI * 2;
-    const r = 100 + (i % 4) * 40;
-    const x = centerX + Math.cos(angle) * r;
-    const y = centerY + Math.sin(angle) * r;
+    const r = 120 + (i % 4) * 45;
+    const x = centerX + Math.cos(angle + time*0.5) * r;
+    const y = centerY + Math.sin(angle + time*0.5) * r;
+
+    // 脉冲光晕（堆顶）
+    if (i === 0) {
+      const pulse = 0.5 + 0.5 * Math.sin(time * 5);
+      ctx.shadowBlur = 30 * pulse; ctx.shadowColor = '#f59e0b';
+    } else {
+      ctx.shadowBlur = 10; ctx.shadowColor = '#3b82f6';
+    }
+
     ctx.fillStyle = i === 0 ? '#f59e0b' : '#3b82f6';
-    ctx.beginPath(); ctx.arc(x, y, 20, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = 'white'; ctx.font = '14px monospace'; ctx.textAlign = 'center';
-    ctx.fillText(val, x, y + 5);
+    ctx.beginPath(); ctx.arc(x, y, 22, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'white'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(val, x, y + 6);
   });
-  ctx.fillStyle = '#e2e8f0'; ctx.font = '20px bold'; ctx.textAlign = 'center';
-  ctx.fillText('PriorityQueue (最小堆)', centerX, centerY - 180);
+  ctx.fillStyle = '#e2e8f0'; ctx.font = '22px bold'; ctx.textAlign = 'center';
+  ctx.fillText('PriorityQueue (最小堆)', centerX, centerY - 200);
+}
+
+function drawNode(node, x, y, offset, depth = 0) {
+  if (!node) return;
+  if (!node.scale) node.scale = 0; if (!node.opacity) node.opacity = 0;
+  node.scale = Math.min(node.scale + 0.1, 1);
+  node.opacity = Math.min(node.opacity + 0.15, 1);
+
+  ctx.save();
+  ctx.globalAlpha = node.opacity;
+  ctx.translate(x, y);
+  ctx.rotate(Math.sin(time + depth) * 0.05);
+  ctx.scale(node.scale, node.scale);
+
+  ctx.fillStyle = '#ef4444';
+  ctx.shadowBlur = 20; ctx.shadowColor = '#ef4444';
+  ctx.beginPath(); ctx.arc(0, 0, 24, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'white'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
+  ctx.fillText(node.val, 0, 6);
+  ctx.restore();
+
+  if (node.left) {
+    ctx.strokeStyle = '#64748b'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - offset, y + 90); ctx.stroke();
+    drawNode(node.left, x - offset, y + 90, offset * 0.6, depth + 1);
+  }
+  if (node.right) {
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + offset, y + 90); ctx.stroke();
+    drawNode(node.right, x + offset, y + 90, offset * 0.6, depth + 1);
+  }
 }
 
 function drawTreeSet() {
   const centerX = canvas.width * 0.7;
   const centerY = canvas.height / 2;
   drawNode(ts.root, centerX, centerY - 100, 200);
-  ctx.fillStyle = '#e2e8f0'; ctx.font = '20px bold'; ctx.textAlign = 'center';
-  ctx.fillText('TreeSet (红黑树)', centerX, centerY - 180);
-}
-
-function drawNode(node, x, y, offset) {
-  if (!node) return;
-  ctx.fillStyle = '#ef4444';
-  ctx.beginPath(); ctx.arc(x, y, 22, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = 'white'; ctx.font = '14px monospace'; ctx.textAlign = 'center';
-  ctx.fillText(node.val, x, y + 5);
-
-  if (node.left) {
-    ctx.strokeStyle = '#64748b'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - offset, y + 80); ctx.stroke();
-    drawNode(node.left, x - offset, y + 80, offset * 0.6);
-  }
-  if (node.right) {
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + offset, y + 80); ctx.stroke();
-    drawNode(node.right, x + offset, y + 80, offset * 0.6);
-  }
+  ctx.fillStyle = '#e2e8f0'; ctx.font = '22px bold'; ctx.textAlign = 'center';
+  ctx.fillText('TreeSet (红黑树)', centerX, centerY - 200);
 }
 
 function updateStats() {
   document.getElementById('stats').innerHTML = `
-    PQ: ${pq.size()} 个，最小=${pq.peek() || '-'}<br>
-    TS: ${ts.size} 个，最小=${ts.findMin(ts.root) || '-'}<br>
-    内存: PQ ~${(pq.size()*4/1024).toFixed(1)}KB | TS ~${(ts.size*32/1024).toFixed(1)}KB
+    <strong>PQ:</strong> ${pq.size()} 个，最小=<span style="color:#f59e0b">${pq.peek()||'-'}</span><br>
+    <strong>TS:</strong> ${ts.size} 个，最小=<span style="color:#ef4444">${ts.findMin(ts.root)||'-'}</span><br>
+    <strong>内存:</strong> PQ ~${(pq.size()*4/1024).toFixed(1)}KB | TS ~${(ts.size*32/1024).toFixed(1)}KB
   `;
-}
-
-function render() {
-  ctx.fillStyle = 'rgba(15,23,42,0.1)'; ctx.fillRect(0,0,canvas.width,canvas.height);
-  drawPQ();
-  drawTreeSet();
-  updateStats();
-  requestAnimationFrame(render);
 }
 
 render();
