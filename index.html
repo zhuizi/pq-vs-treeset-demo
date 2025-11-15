@@ -5,63 +5,87 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>PQ vs TreeSet 丝滑动画 | @zhuizi1</title>
   <style>
-    body { margin:0; background:#0a0a1a; color:#e2e8f0; font-family: system-ui; overflow:hidden; }
-    canvas { display:block; }
-    .panel { position:absolute; top:20px; left:20px; background:rgba(15,23,42,0.9); padding:15px; border-radius:12px; width:300px; backdrop-filter: blur(10px); }
-    button { margin:5px; padding:10px 18px; background:linear-gradient(45deg,#1d4ed8,#3b82f6); color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold; box-shadow:0 2px 8px rgba(0,0,0,0.3); transition:0.3s; }
-    button:hover { transform:translateY(-2px); box-shadow:0 4px 16px rgba(59,130,246,0.5); }
-    .stats { margin-top:12px; font-family: 'Courier New', monospace; font-size:13px; line-height:1.6; }
-    .title { text-align:center; margin:20px; font-size:26px; font-weight:bold; background:linear-gradient(90deg,#60a5fa,#a78bfa); -webkit-background-clip:text; color:transparent; }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#0a0a1a; color:#e2e8f0; font-family:system-ui,-apple-system,sans-serif; overflow:hidden; }
+    canvas { display:block; width:100%; height:100%; }
+    .container { position:relative; width:100vw; height:100vh; }
+    .panel {
+      position:absolute; top:10px; left:10px; right:10px; max-width:380px;
+      background:rgba(15,23,42,0.92); backdrop-filter:blur(12px);
+      border-radius:16px; padding:16px; box-shadow:0 8px 32px rgba(0,0,0,0.4);
+      z-index:10; overflow-y:auto; max-height:calc(100vh - 20px);
+    }
+    .title {
+      text-align:center; margin-bottom:12px; font-size:20px; font-weight:bold;
+      background:linear-gradient(90deg,#60a5fa,#a78bfa); -webkit-background-clip:text; color:transparent;
+    }
+    .btn-group { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+    button {
+      flex:1; min-width:100px; padding:10px 12px; background:linear-gradient(45deg,#1d4ed8,#3b82f6);
+      color:white; border:none; border-radius:10px; cursor:pointer; font-weight:600;
+      box-shadow:0 2px 8px rgba(0,0,0,0.3); transition:0.3s; font-size:14px;
+    }
+    button:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(59,130,246,0.5); }
+    .stats { font-family:'Courier New',monospace; font-size:13px; line-height:1.7; color:#94a3b8; }
+    .stats strong { color:#e2e8f0; }
+    .footer { text-align:center; margin-top:12px; font-size:12px; color:#64748b; }
+    @media (max-width: 768px) {
+      .panel { left:5px; right:5px; top:5px; padding:12px; }
+      .title { font-size:18px; }
+      button { font-size:13px; padding:8px 10px; }
+    }
   </style>
 </head>
 <body>
-<div class="title">PriorityQueue vs TreeSet · 丝滑动画对比 | @zhuizi1</div>
-<canvas id="canvas"></canvas>
-<div class="panel">
-  <button onclick="addRandom()">插入随机数</button>
-  <button onclick="pq.poll(); render()">PQ poll()</button>
-  <button onclick="ts.pollFirst(); render()">TS pollFirst()</button>
-  <button onclick="reset()">重置</button>
-  <div class="stats" id="stats"></div>
+<div class="container">
+  <canvas id="canvas"></canvas>
+  <div class="panel">
+    <div class="title">PQ vs TreeSet · 丝滑动画 | @zhuizi1</div>
+    <div class="btn-group">
+      <button onclick="addRandom()">插入随机数</button>
+      <button onclick="pq.poll(); render()">PQ poll()</button>
+      <button onclick="ts.pollFirst(); render()">TS pollFirst()</button>
+      <button onclick="reset()">重置</button>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="footer">SG · Nov 15, 2025</div>
+  </div>
 </div>
 
 <script>
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+let width, height;
+function resize() {
+  width = canvas.width = canvas.offsetWidth;
+  height = canvas.height = canvas.offsetHeight;
+}
+resize(); window.addEventListener('resize', resize);
 
 // 粒子系统
 class Particle {
   constructor(x, y, val, color, type = 'trail') {
     this.x = x; this.y = y; this.val = val; this.color = color;
     this.vx = (Math.random()-0.5)*4; this.vy = (Math.random()-0.5)*4;
-    this.life = 1; this.decay = 0.02; this.type = type;
-    this.scale = type === 'explode' ? 1.5 : 0.8;
+    this.life = 1; this.decay = type === 'explode' ? 0.03 : 0.02;
+    this.type = type; this.scale = type === 'explode' ? 1.5 : 0.6;
   }
-  update() {
-    this.x += this.vx; this.y += this.vy;
-    this.vy += 0.1; this.life -= this.decay;
-    this.scale *= 0.98;
-  }
+  update() { this.x += this.vx; this.y += this.vy; this.vy += 0.15; this.life -= this.decay; this.scale *= 0.97; }
   draw() {
     ctx.save();
     ctx.globalAlpha = this.life;
     ctx.translate(this.x, this.y);
     ctx.scale(this.scale, this.scale);
     if (this.type === 'explode') {
-      ctx.shadowBlur = 20; ctx.shadowColor = this.color;
-      ctx.fillStyle = this.color;
-      ctx.font = 'bold 20px monospace';
-      ctx.fillText(this.val, -10, 5);
+      ctx.shadowBlur = 25; ctx.shadowColor = this.color;
+      ctx.fillStyle = this.color; ctx.font = 'bold 22px monospace';
+      ctx.fillText(this.val, -12, 6);
     } else {
-      ctx.fillStyle = this.color;
-      ctx.font = '12px monospace';
-      ctx.fillText('·', 0, 0);
+      ctx.fillStyle = this.color; ctx.font = '10px monospace'; ctx.fillText('·', 0, 0);
     }
     ctx.restore();
   }
 }
-
 let particles = [];
 
 // 最小堆
@@ -73,14 +97,7 @@ class PriorityQueue {
     const min = this.data[0];
     this.data[0] = this.data.pop();
     this.siftDown(0);
-    // 爆炸粒子
-    const center = { x: canvas.width * 0.3, y: canvas.height / 2 };
-    for (let i = 0; i < 12; i++) {
-      const angle = i * Math.PI * 2 / 12;
-      const p = new Particle(center.x, center.y, min, '#f59e0b', 'explode');
-      p.vx = Math.cos(angle) * 6; p.vy = Math.sin(angle) * 6;
-      particles.push(p);
-    }
+    explode(min, width * 0.3, height / 2, '#f59e0b');
     return min;
   }
   siftUp(i) { while (i > 0) { let p = (i-1)>>1; if (this.data[p] <= this.data[i]) break; [this.data[p], this.data[i]] = [this.data[i], this.data[p]]; i = p; } }
@@ -89,7 +106,7 @@ class PriorityQueue {
   size() { return this.data.length; }
 }
 
-// 简化红黑树（动画用）
+// 红黑树（简化版，支持删除）
 class TreeSet {
   constructor() { this.root = null; this.size = 0; }
   add(x) { if (this.contains(x)) return; this.root = this.insert(this.root, x); this.size++; }
@@ -99,8 +116,28 @@ class TreeSet {
     else if (x > node.val) node.right = this.insert(node.right, x);
     return node;
   }
-  pollFirst() { if (!this.root) return null; const min = this.findMin(this.root); this.size--; return min; }
+  pollFirst() {
+    if (!this.root) return null;
+    const min = this.findMin(this.root);
+    this.root = this.delete(this.root, min);
+    this.size--;
+    explode(min, width * 0.7, height / 2, '#ef4444');
+    return min;
+  }
   findMin(node) { return node.left ? this.findMin(node.left) : node.val; }
+  delete(node, x) {
+    if (!node) return null;
+    if (x < node.val) node.left = this.delete(node.left, x);
+    else if (x > node.val) node.right = this.delete(node.right, x);
+    else {
+      if (!node.left) return node.right;
+      if (!node.right) return node.left;
+      const min = this.findMin(node.right);
+      node.val = min;
+      node.right = this.delete(node.right, min);
+    }
+    return node;
+  }
   contains(x) { return this._contains(this.root, x); }
   _contains(node, x) { if (!node) return false; if (x === node.val) return true; return x < node.val ? this._contains(node.left, x) : this._contains(node.right, x); }
 }
@@ -108,43 +145,44 @@ class TreeSet {
 const pq = new PriorityQueue();
 const ts = new TreeSet();
 
-// 背景星空
-let stars = [];
-for (let i = 0; i < 100; i++) {
-  stars.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, size: Math.random()*2, speed: Math.random()*0.5+0.1 });
+// 爆炸粒子
+function explode(val, x, y, color) {
+  for (let i = 0; i < 12; i++) {
+    const angle = i * Math.PI * 2 / 12;
+    const p = new Particle(x, y, val, color, 'explode');
+    p.vx = Math.cos(angle) * 7; p.vy = Math.sin(angle) * 7;
+    particles.push(p);
+  }
 }
 
 function addRandom() {
   const val = Math.floor(Math.random() * 100);
+  const startX = width / 2;
   const startY = 80;
-  const startX = canvas.width / 2;
-  // 飞入粒子轨迹
-  for (let i = 0; i < 20; i++) {
-    setTimeout(() => {
-      particles.push(new Particle(startX + (Math.random()-0.5)*100, startY + i*15, '', '#60a5fa'));
-    }, i * 30);
+  for (let i = 0; i < 15; i++) {
+    setTimeout(() => particles.push(new Particle(startX + (Math.random()-0.5)*80, startY + i*12, '', '#60a5fa')), i * 35);
   }
-  setTimeout(() => {
-    pq.offer(val);
-    ts.add(val);
-    render();
-  }, 600);
+  setTimeout(() => { pq.offer(val); ts.add(val); render(); }, 500);
 }
 
 function reset() {
   pq.data = []; ts.root = null; ts.size = 0; particles = []; render();
 }
 
-// 动画渲染
+// 背景星空
+let stars = Array.from({length: 80}, () => ({
+  x: Math.random()*width, y: Math.random()*height, size: Math.random()*1.5, speed: Math.random()*0.4+0.1
+}));
+
 let time = 0;
 function render() {
   time += 0.016;
-  ctx.fillStyle = '#0a0a1a'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = '#0a0a1a'; ctx.fillRect(0,0,width,height);
 
-  // 流动星空
+  // 星空
   stars.forEach(s => {
     s.x -= s.speed;
-    if (s.x < 0) s.x = canvas.width;
+    if (s.x < 0) s.x = width;
     ctx.fillStyle = `rgba(255,255,255,${s.size/2})`;
     ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI*2); ctx.fill();
   });
@@ -160,69 +198,68 @@ function render() {
 }
 
 function drawPQ() {
-  const centerX = canvas.width * 0.3;
-  const centerY = canvas.height / 2;
+  const scale = Math.min(width, height) / 800;
+  const centerX = width * 0.3;
+  const centerY = height / 2;
+  const baseR = 100 * scale;
   pq.data.forEach((val, i) => {
     const angle = (i / Math.max(pq.data.length, 1)) * Math.PI * 2;
-    const r = 120 + (i % 4) * 45;
-    const x = centerX + Math.cos(angle + time*0.5) * r;
-    const y = centerY + Math.sin(angle + time*0.5) * r;
+    const r = baseR + (i % 4) * 40 * scale;
+    const x = centerX + Math.cos(angle + time*0.4) * r;
+    const y = centerY + Math.sin(angle + time*0.4) * r;
 
-    // 脉冲光晕（堆顶）
-    if (i === 0) {
-      const pulse = 0.5 + 0.5 * Math.sin(time * 5);
-      ctx.shadowBlur = 30 * pulse; ctx.shadowColor = '#f59e0b';
-    } else {
-      ctx.shadowBlur = 10; ctx.shadowColor = '#3b82f6';
-    }
-
+    ctx.shadowBlur = i === 0 ? 35 * (0.5 + 0.5*Math.sin(time*5)) : 12;
+    ctx.shadowColor = i === 0 ? '#f59e0b' : '#3b82f6';
     ctx.fillStyle = i === 0 ? '#f59e0b' : '#3b82f6';
-    ctx.beginPath(); ctx.arc(x, y, 22, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, 22 * scale, 0, Math.PI*2); ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.fillStyle = 'white'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
-    ctx.fillText(val, x, y + 6);
+    ctx.fillStyle = 'white'; ctx.font = `bold ${16*scale}px monospace`; ctx.textAlign = 'center';
+    ctx.fillText(val, x, y + 6*scale);
   });
-  ctx.fillStyle = '#e2e8f0'; ctx.font = '22px bold'; ctx.textAlign = 'center';
-  ctx.fillText('PriorityQueue (最小堆)', centerX, centerY - 200);
+  ctx.fillStyle = '#e2e8f0'; ctx.font = `bold ${20*scale}px system-ui`; ctx.textAlign = 'center';
+  ctx.fillText('PriorityQueue (最小堆)', centerX, centerY - 180*scale);
 }
 
-function drawNode(node, x, y, offset, depth = 0) {
+function drawNode(node, x, y, offset, depth = 0, scale = 1) {
   if (!node) return;
   if (!node.scale) node.scale = 0; if (!node.opacity) node.opacity = 0;
-  node.scale = Math.min(node.scale + 0.1, 1);
-  node.opacity = Math.min(node.opacity + 0.15, 1);
+  node.scale = Math.min(node.scale + 0.12, 1);
+  node.opacity = Math.min(node.opacity + 0.18, 1);
 
   ctx.save();
   ctx.globalAlpha = node.opacity;
   ctx.translate(x, y);
-  ctx.rotate(Math.sin(time + depth) * 0.05);
-  ctx.scale(node.scale, node.scale);
+  ctx.rotate(Math.sin(time + depth) * 0.06);
+  ctx.scale(node.scale * scale, node.scale * scale);
 
+  ctx.shadowBlur = 22; ctx.shadowColor = '#ef4444';
   ctx.fillStyle = '#ef4444';
-  ctx.shadowBlur = 20; ctx.shadowColor = '#ef4444';
-  ctx.beginPath(); ctx.arc(0, 0, 24, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 0, 24 * scale, 0, Math.PI*2); ctx.fill();
   ctx.shadowBlur = 0;
-  ctx.fillStyle = 'white'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
-  ctx.fillText(node.val, 0, 6);
+  ctx.fillStyle = 'white'; ctx.font = `bold ${16*scale}px monospace`; ctx.textAlign = 'center';
+  ctx.fillText(node.val, 0, 6*scale);
   ctx.restore();
 
+  const childOffset = offset * 0.6;
   if (node.left) {
-    ctx.strokeStyle = '#64748b'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - offset, y + 90); ctx.stroke();
-    drawNode(node.left, x - offset, y + 90, offset * 0.6, depth + 1);
+    ctx.strokeStyle = '#64748b'; ctx.lineWidth = 2 * scale;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - childOffset, y + 90*scale); ctx.stroke();
+    drawNode(node.left, x - childOffset, y + 90*scale, childOffset, depth + 1, scale);
   }
   if (node.right) {
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + offset, y + 90); ctx.stroke();
-    drawNode(node.right, x + offset, y + 90, offset * 0.6, depth + 1);
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + childOffset, y + 90*scale); ctx.stroke();
+    drawNode(node.right, x + childOffset, y + 90*scale, childOffset, depth + 1, scale);
   }
 }
 
 function drawTreeSet() {
-  const centerX = canvas.width * 0.7;
-  const centerY = canvas.height / 2;
-  drawNode(ts.root, centerX, centerY - 100, 200);
-  ctx.fillStyle = '#e2e8f0'; ctx.font = '22px bold'; ctx.textAlign = 'center';
-  ctx.fillText('TreeSet (红黑树)', centerX, centerY - 200);
+  const scale = Math.min(width, height) / 800;
+  const centerX = width * 0.7;
+  const centerY = height / 2;
+  const baseOffset = 180 * scale;
+  drawNode(ts.root, centerX, centerY - 100*scale, baseOffset, 0, scale);
+  ctx.fillStyle = '#e2e8f0'; ctx.font = `bold ${20*scale}px system-ui`; ctx.textAlign = 'center';
+  ctx.fillText('TreeSet (红黑树)', centerX, centerY - 180*scale);
 }
 
 function updateStats() {
@@ -234,7 +271,6 @@ function updateStats() {
 }
 
 render();
-window.onresize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; render(); };
 </script>
 </body>
 </html>
